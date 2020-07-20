@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style> /* Set the CSS */
+  .button {
+    border: none;
+    color: white;
+    padding: 15px 32px;
+    text-align: center;
+    left: 50%;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+  }
+
+  .score_btn {background-color: #4CAF50;} /* Green */
+  .game_btn {background-color: #008CBA;} /* Blue */
+  .goal_btn {background-color: #CD5C5C;} /* Red */
+
+  div.tooltip {
+    position: absolute;
+    text-align: start;
+    /* width: 150px; */
+	  /* height: 28px; */
+	  padding: 2px;
+	  font: 12px sans-serif;
+	  background: lightblue;
+	  border: 0px;
+	  border-radius: 8px;
+  }
+</style>
+
+<head>
+  <title>18-19 Premier League Score</title>
+</head>
+
+<!-- load the d3.js library -->
+<script type="text/javascript" src="https://d3js.org/d3.v5.min.js"></script>
+
+<html>
+<body onload="init()">
+  <h2 style="text-align:center">2018–19 Premier League Statistics</h2>
+
+  <!-- put svg into chart -->
+  <div id="chart" align="center"></div>
+
+  <!-- <button class="button score_btn" onclick="score_barplot()">Score</button>
+  <button class="button game_btn" onclick="game_barplot()">Games</button>
+  <button class="button goal_btn" onclick="goal_barplot()">Goals</button> -->
+
+  <script>
+    // size parameters
+    var window_width = 700
+    var window_height = 500
+    var margin = {top: 50, right: 50, bottom: 100, left: 50}
+    var width = window_width - margin.left - margin.right
+    var height = window_height - margin.top - margin.bottom
+    // global svg variable
+    var svg = null
+    // global data variable
+    var data = null
+    // duration of transition (ms)
+    var duration = 400
+    // init function
+    async function init() {
+      // load data
+      data = await d3.csv("https://wanlinyang.github.io/1819PremierLeague.csv")
+      score_barplot()
+      // game_barplot()
+      // goal_barplot()
+    }
+
+    function score_barplot() {
+      // reset svg
+      if (svg != null) { d3.select("svg").remove(); }
+      svg = d3.select("#chart")
+              .append("svg")
+                .attr("width", window_width)
+                .attr("height", window_height)
+              .append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+      // find the max point
+      var max_points = 0; var points_limit = 100
+      data.forEach(function (d) {
+        max_points = Math.max(max_points, parseInt(d.Pts))
+      })
+      // size before transition
+      var init_height = height/15
+
+      // tooltip
+      var tooltip = d3.select("#chart")
+                      .append("div")
+                        .attr("class", "tooltip")
+                        .style("opacity", 0)
+
+      // X axis
+      var x = d3.scaleBand().domain(data.map(function(d){return d.Team;}))
+                .range([0,width]).padding(0.2)
+      svg.append("g")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+          .attr("transform", "translate(-10,0)rotate(-45)")
+          .style("text-anchor", "end")
+      // Y axis
+      var y = d3.scaleLinear().domain([0,points_limit]).range([height, 0])
+      svg.append("g").call(d3.axisLeft(y));
+      // label of Y axis
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left)
+        .attr("x",0 - (height / 2))
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .text("Points")
+      // Bar plot
+      svg.selectAll("rect")
+        .data(data)
+        .enter()
+        .append("rect")
+          .attr("x", function(d) { return x(d.Team); })
+          .attr("y", height-init_height )
+          .attr("width", x.bandwidth())
+          .attr("height", init_height )
+          .on("mouseover", function(d,i) {
+            d3.select(this).attr("fill","green")
+            tooltip.style("opacity", 1)
+            .style("left", (d3.event.pageX)+"px")
+            .style("top", (d3.event.pageY)+"px")
+            .style("width", Math.max(60,d.Team.length*7)+"px")
+            .style("height", "42px")
+            .html(d.Team+"<br/>"+"Points: "+d.Pts
+                  +"<br/>"+"Rank: "+(i+1))
+          })
+          .on("mouseout", function(d) {
+            d3.select(this).attr("fill","#69b3a2")
+            tooltip.style("opacity", 0)
+          })
+          .attr("fill", "#69b3a2")
+          .attr("stroke", "black")
+          // transition
+          .transition()
+          .duration(duration)
+          .attr("y", function(d) { return y(parseInt(d.Pts)); })
+          .attr("height", function(d) { return height-y(parseInt(d.Pts)); })
+          .delay(function(d,i) { return (i*10) })
+
+      // Title of chart
+      svg.append("text")
+        .attr("x", (width / 2))
+        .attr("y", 0 - (margin.top / 2))
+        .attr("text-anchor", "middle")
+        .style("font-size", "18px")
+        .text("Points Barplot")
+    }
+
+    function game_barplot() {
+      // reset svg
+      if (svg != null) { d3.select("svg").remove(); }
+      svg = d3.select("#chart")
+              .append("svg")
+                .attr("width", window_width)
+                .attr("height", window_height)
+              .append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+      // find the max game amount
+      var max_win = 0; var max_draw =0; var max_lose = 0;
+      data.forEach(function (d) {
+        max_win = Math.max(max_win, parseInt(d.W))
+        max_draw = Math.max(max_draw, parseInt(d.D))
+        max_lose = Math.max(max_lose, parseInt(d.L))
+      })
+      var max_game = Math.max(max_win, max_draw, max_lose)
+      var game_limit = 35
+
+      // list of teams
+      var teams = data.map(function(d) {return d.Team})
+      // list of subgroup of each team (Win, Draw, Lose)
+      var subgroups = ["W","D","L"]
+      // size before transition
+      var init_height = height/15
+
+      // X axis
+      var x = d3.scaleBand().domain(teams)
+                .range([0,width]).padding(0.2)
+      svg.append("g")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+          .attr("transform", "translate(-10,0)rotate(-45)")
+          .style("text-anchor", "end")
+
+      var xSubgroup = d3.scaleBand()
+                        .domain(subgroups).range([0,x.bandwidth()])
+                        .padding(0.01)
+
+      // Y axis
+      var y = d3.scaleLinear().domain([0,game_limit]).range([height,0])
+      svg.append("g").call(d3.axisLeft(y))
+      // label of Y axis
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left)
+        .attr("x",0 - (height / 2))
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .text("Games")
+      // tooltip
+      var tooltip = d3.select("#chart")
+                      .append("div")
+                        .attr("class", "tooltip")
+                        .style("opacity", 0)
+
+      // one color per subgroup
+      var color = d3.scaleOrdinal().domain(subgroups)
+                    .range(['#4daf4a','#377eb8','#e41a1c'])
+      // barplot
+      svg.append("g")
+        .selectAll("g")
+        .data(data)
+        .enter()
+        .append("g")
+          .attr("transform", function(d) {return "translate("+x(d.Team)+",0)"})
+        .selectAll("rect")
+        .data(function(d,i) {return subgroups.map(function(key) {
+          return {key: key, value: d[key], idx: i};});})
+        .enter().append("rect")
+          .attr("x", function(d) { return xSubgroup(d.key) })
+          .attr("y", height-init_height)
+          .attr("width", xSubgroup.bandwidth())
+          .attr("height", init_height)
+          // tooltip
+          .on("mouseover", function(d,i) {
+            tooltip.style("opacity", 1)
+            .style("left", (d3.event.pageX)+"px")
+            .style("top", (d3.event.pageY)+"px")
+            .style("width", Math.max(60,data[d.idx].Team.length*7)+"px")
+            .style("height", "70px")
+            .html(data[d.idx].Team+"<br/>"+"Win: "+data[d.idx].W
+                  +"<br/>"+"Draw: "+data[d.idx].D
+                  +"<br/>"+"Loss: "+data[d.idx].L
+                  +"<br/>"+"Rank: "+(d.idx+1))
+          })
+          .on("mouseout", function(d) {
+            tooltip.style("opacity", 0)
+          })
+          .attr("fill", function(d) { return color(d.key) })
+          // transition
+          .transition()
+          .duration(duration)
+          .attr("y", function(d) { return y(d.value) })
+          .attr("height", function(d) { return height-y(d.value) })
+          .delay(function(d,i) { return (i*10) })
+
+      // Title of chart
+      svg.append("text")
+        .attr("x", (width / 2))
+        .attr("y", 0 - (margin.top / 2))
+        .attr("text-anchor", "middle")
+        .style("font-size", "18px")
+        .text("Games Barplot")
+      // Legend
+      legend_dict = {"Win":"#4daf4a","Draw":"#377eb8","Loss":"#e41a1c"}
+      legend_keys = ["Win","Draw","Loss"]
+      var legend_size = 10
+      svg.append("g")
+          .attr("transform", "translate("+width*4/5+",0)")
+        .selectAll("rect")
+        .data(legend_keys)
+        .enter().append("rect")
+          .attr("x", 0)
+          .attr("y", function(d,i) { return i*(legend_size+5) })
+          .attr("height",legend_size).attr("width",legend_size)
+          .attr("fill", function(d) { return legend_dict[d] })
+      svg.append("g")
+          .attr("transform", "translate("+width*4/5+",0)")
+        .selectAll("text")
+        .data(legend_keys)
+          .enter().append("text")
+          .attr("x", legend_size+5)
+          .attr("y", function(d,i) { return i*(legend_size+5)+legend_size })
+          .attr("fill", function(d) { return legend_dict[d] })
+          .attr("text-anchor", "start")
+          .style("font-size", "16px")
+          .text(function(d) { return d})
+    }
+
+    function goal_barplot() {
+      if (svg != null) { d3.select("svg").remove(); }
+      svg = d3.select("#chart")
+              .append("svg")
+                .attr("width", window_width)
+                .attr("height", window_height)
+              .append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+      // find max goals and conceded amount
+      var max_goals = 0; var max_concedes = 0
+      data.forEach(function (d) {
+        max_goals = Math.max(max_goals, parseInt(d.GF))
+        max_concedes = Math.max(max_concedes, parseInt(d.GA))
+      })
+      var max_amount = Math.max(max_goals, max_concedes)
+
+      // list of teams
+      var teams = data.map(function(d) {return d.Team})
+      // key of goal and conceded (Goal, Conceded)
+      var subgroups = ["GF","GA"]
+      // size of transition
+      var init_height = height/15
+
+      // X axis
+      var x = d3.scaleBand().domain(teams)
+                .range([0,width]).padding(0.2)
+      svg.append("g")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+          .attr("transform", "translate(-10,0)rotate(-45)")
+          .style("text-anchor", "end")
+      // tooltip
+      var tooltip = d3.select("#chart")
+                      .append("div")
+                        .attr("class", "tooltip")
+                        .style("opacity", 0)
+
+      // up Y axis
+      var y_up = d3.scaleLinear().domain([0,max_amount]).range([height/2,0])
+      svg.append("g").call(d3.axisLeft(y_up))
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left)
+        .attr("x",0 - (height / 4))
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .text("Goals")
+      // upper barplot
+      svg.append("g")
+        .selectAll("rect")
+        .data(data)
+        .enter()
+        .append("rect")
+          .attr("x", function(d) { return x(d.Team); })
+          .attr("y", height/2-init_height)
+          .attr("width", x.bandwidth())
+          .attr("height", init_height)
+          .on("mouseover", function(d,i) {
+            tooltip.style("opacity", 1)
+            .style("left", (d3.event.pageX)+"px")
+            .style("top", (d3.event.pageY)+"px")
+            .style("width", Math.max(80,d.Team.length*7)+"px")
+            .style("height", "55px")
+            .html(d.Team+"<br/>"+"Goals: "+d.GF
+                  +"<br/>"+"Conceded: "+d.GA
+                  +"<br/>"+"Rank: "+(i+1))
+          })
+          .on("mouseout", function(d) {
+            tooltip.style("opacity", 0)
+          })
+          .attr("fill", "seagreen")
+          .attr("stroke", "black")
+          // add transition
+          .transition()
+          .duration(duration)
+          .attr("y", function(d) { return y_up(parseInt(d.GF)); })
+          .attr("height", function(d) { return height/2-y_up(parseInt(d.GF)); })
+          .delay(function(d,i) { return (i*10) })
+
+      // down Y axis
+      var y_down = d3.scaleLinear().domain([0,max_amount]).range([height/2,height])
+      svg.append("g").call(d3.axisLeft(y_down))
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left)
+        .attr("x",0 - (height*3 / 4))
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .text("Conceded Goals")
+      // lower barplot
+      svg.append("g")
+        .selectAll("rect")
+        .data(data)
+        .enter()
+        .append("rect")
+          .attr("x", function(d) { return x(d.Team); })
+          .attr("y", function(d) { return height/2; } )
+          .attr("width", x.bandwidth())
+          .attr("height", function(d) { return init_height; })
+          .on("mouseover", function(d,i) {
+            tooltip.style("opacity", 1)
+            .style("left", (d3.event.pageX)+"px")
+            .style("top", (d3.event.pageY)+"px")
+            .style("width", Math.max(80,d.Team.length*7)+"px")
+            .style("height", "55px")
+            .html(d.Team+"<br/>"+"Goals: "+d.GF
+                  +"<br/>"+"Conceded: "+d.GA
+                  +"<br/>"+"Rank: "+(i+1))
+          })
+          .on("mouseout", function(d) {
+            tooltip.style("opacity", 0)
+          })
+          .attr("fill", "salmon")
+          .attr("stroke", "black")
+          // add transition
+          .transition()
+          .duration(duration)
+          .attr("y", function(d) { return height/2 })
+          .attr("height", function(d) { return y_down(parseInt(d.GA))-height/2; })
+          .delay(function(d,i) { return (i*10) })
+      // Title of chart
+      svg.append("text")
+        .attr("x", (width / 2))
+        .attr("y", 0 - (margin.top / 2))
+        .attr("text-anchor", "middle")
+        .style("font-size", "18px")
+        .text("Goals Barplot")
+      // Legend
+      legend_dict = {"Goals":"seagreen","Conceded Goals":"salmon"}
+      legend_keys = ["Goals","Conceded Goals"]
+      var legend_size = 10
+      svg.append("g")
+          .attr("transform", "translate("+width*4/5+",0)")
+        .selectAll("rect")
+        .data(legend_keys)
+        .enter().append("rect")
+          .attr("x", 0)
+          .attr("y", function(d,i) { return i*(legend_size+5) })
+          .attr("height",legend_size).attr("width",legend_size)
+          .attr("fill", function(d) { return legend_dict[d] })
+      svg.append("g")
+          .attr("transform", "translate("+width*4/5+",0)")
+        .selectAll("text")
+        .data(legend_keys)
+          .enter().append("text")
+          .attr("x", legend_size+5)
+          .attr("y", function(d,i) { return i*(legend_size+5)+legend_size })
+          .attr("fill", function(d) { return legend_dict[d] })
+          .attr("text-anchor", "start")
+          .style("font-size", "16px")
+          .text(function(d) { return d})
+    }
+  </script>
+
+  <!-- buttons -->
+  <div id="chart" align="center">
+    <input name="plotbtn" type="radio" value="points" onclick="score_barplot()" checked="checked"> Points
+    <input name="plotbtn" type="radio" value="games" onclick="game_barplot()"> Games
+    <input name="plotbtn" type="radio" value="goals" onclick="goal_barplot()"> Goals
+  </div>
+
+</body>
+</html>
