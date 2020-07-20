@@ -66,7 +66,7 @@
     // init function
     async function init() {
       // load data
-      data = await d3.csv("1819PremierLeague.csv")
+      data = await d3.csv("https://wanlinyang.github.io/1819PremierLeague.csv")
       score_barplot()
       // game_barplot()
       // goal_barplot()
@@ -215,7 +215,9 @@
 
       // one color per subgroup
       var color = d3.scaleOrdinal().domain(subgroups)
-                    .range(['#4daf4a','#377eb8','#e41a1c'])
+                    .range(['lightgreen','lightblue','lightcoral'])
+      var highlight_color = d3.scaleOrdinal().domain(subgroups)
+                              .range(['green','dodgerblue','red'])
       // barplot
       svg.append("g")
         .selectAll("g")
@@ -233,6 +235,7 @@
           .attr("height", init_height)
           // tooltip
           .on("mouseover", function(d,i) {
+            d3.select(this).attr("fill", function(d) { return highlight_color(d.key) })
             tooltip.style("opacity", 1)
             .style("left", (d3.event.pageX)+"px")
             .style("top", (d3.event.pageY)+"px")
@@ -244,9 +247,11 @@
                   +"<br/>"+"Rank: "+(d.idx+1))
           })
           .on("mouseout", function(d) {
+            d3.select(this).attr("fill", function(d) { return color(d.key) })
             tooltip.style("opacity", 0)
           })
           .attr("fill", function(d) { return color(d.key) })
+          .attr("stroke", "gray")
           // transition
           .transition()
           .duration(duration)
@@ -262,7 +267,7 @@
         .style("font-size", "18px")
         .text("Games Barplot")
       // Legend
-      legend_dict = {"Win":"#4daf4a","Draw":"#377eb8","Loss":"#e41a1c"}
+      legend_dict = {"Win":"lightgreen","Draw":"lightblue","Loss":"lightcoral"}
       legend_keys = ["Win","Draw","Loss"]
       var legend_size = 10
       svg.append("g")
@@ -346,6 +351,7 @@
           .attr("width", x.bandwidth())
           .attr("height", init_height)
           .on("mouseover", function(d,i) {
+            d3.select(this).attr("fill","green")
             tooltip.style("opacity", 1)
             .style("left", (d3.event.pageX)+"px")
             .style("top", (d3.event.pageY)+"px")
@@ -356,9 +362,10 @@
                   +"<br/>"+"Rank: "+(i+1))
           })
           .on("mouseout", function(d) {
+            d3.select(this).attr("fill","darkseagreen")
             tooltip.style("opacity", 0)
           })
-          .attr("fill", "seagreen")
+          .attr("fill", "darkseagreen")
           .attr("stroke", "black")
           // add transition
           .transition()
@@ -388,6 +395,7 @@
           .attr("width", x.bandwidth())
           .attr("height", function(d) { return init_height; })
           .on("mouseover", function(d,i) {
+            d3.select(this).attr("fill","red")
             tooltip.style("opacity", 1)
             .style("left", (d3.event.pageX)+"px")
             .style("top", (d3.event.pageY)+"px")
@@ -398,6 +406,7 @@
                   +"<br/>"+"Rank: "+(i+1))
           })
           .on("mouseout", function(d) {
+            d3.select(this).attr("fill","salmon")
             tooltip.style("opacity", 0)
           })
           .attr("fill", "salmon")
@@ -416,7 +425,7 @@
         .style("font-size", "18px")
         .text("Goals Barplot")
       // Legend
-      legend_dict = {"Goals":"seagreen","Conceded Goals":"salmon"}
+      legend_dict = {"Goals":"darkseagreen","Conceded Goals":"salmon"}
       legend_keys = ["Goals","Conceded Goals"]
       var legend_size = 10
       svg.append("g")
