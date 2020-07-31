@@ -29,6 +29,12 @@
 	  border: 0px;
 	  border-radius: 8px;
   }
+
+  .annotation {
+    fill: gray;
+    text-anchor: left;
+    font-size: 12px;
+  }
 </style>
 
 <head>
@@ -41,7 +47,22 @@
 <html>
 <body onload="init()">
   <h2 style="text-align:center">2018–19 Premier League Statistics</h2>
-  <p style="text-align:center">Source <a href="1819PremierLeague.csv">1819PremierLeague.csv</a> file</p>
+  <!-- <p style="text-align:center">Source <a href="1819PremierLeague.csv">1819PremierLeague.csv</a> file</p> -->
+
+  <h3 style="text-align:left; margin-left:10%" >Introduction</h3>
+  <p style="text-align:left; margin-left:10%; margin-right:10%; padding-left:50px; line-height:22px;">
+    In this data visualization, we will demostrate the statistics of Premier League of 2018-19 season.
+    The source file of data is <a href="1819PremierLeague.csv">1819PremierLeague.csv</a>.
+    <br> The following three sliding windows are <u>Points Barplot</u>, showing points earned by each team;
+    <u>Games Barplot</u>, showing numbers of game a team won, drew, or lost;
+    <u>Goals Barplot</u>, showing amounts of goals and conceded goals of each team.
+  </p>
+
+  <h3 style="text-align:left; margin-left:10%" >Interaction</h3>
+  <p style="text-align:left; margin-left:10%; margin-right:10%; padding-left:50px; line-height:22px;">
+    Select radio button to switch among different barplots.
+    <br>Hover the mouse over bars to see exact values.
+  </p>
 
   <!-- put svg into chart -->
   <div id="chart" align="center"></div>
@@ -52,9 +73,9 @@
 
   <script>
     // size parameters
-    var window_width = 700
+    var window_width = 1000
     var window_height = 500
-    var margin = {top: 50, right: 50, bottom: 100, left: 50}
+    var margin = {top: 50, right: 120, bottom: 100, left: 250}
     var width = window_width - margin.left - margin.right
     var height = window_height - margin.top - margin.bottom
     // global svg variable
@@ -110,11 +131,40 @@
       // label of Y axis
       svg.append("text")
         .attr("transform", "rotate(-90)")
-        .attr("y", 0 - margin.left)
-        .attr("x",0 - (height / 2))
+        .attr("y", 0 - 50)
+        .attr("x", 0 - (height / 2))
         .attr("dy", "1em")
         .style("text-anchor", "middle")
         .text("Points")
+      // annotation of Y axis
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "12em")
+        .text("Teams receive three points for a win")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "13em")
+        .text("and one point for a draw. No points")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "14em")
+        .text("are awarded for a loss.")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "15.5em")
+        .text("The team with the highest points at")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "16.5em")
+        .text("the end of the season is the champion.")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "18em")
+        .text("The three lowest placed teams in the")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "19em")
+        .text("Premier League are relegated.")
       // Bar plot
       svg.selectAll("rect")
         .data(data)
@@ -202,11 +252,28 @@
       // label of Y axis
       svg.append("text")
         .attr("transform", "rotate(-90)")
-        .attr("y", 0 - margin.left)
+        .attr("y", 0 - 50)
         .attr("x",0 - (height / 2))
         .attr("dy", "1em")
         .style("text-anchor", "middle")
         .text("Games")
+      // annotation of Y axis
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "12em")
+        .text("During the course of a season each club")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "13em")
+        .text("plays the others twice, for 38 games.")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "14.5em")
+        .text("Each game only has one result:")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "15.5em")
+        .text("Win, Draw, or Loss")
       // tooltip
       var tooltip = d3.select("#chart")
                       .append("div")
@@ -335,11 +402,24 @@
       svg.append("g").call(d3.axisLeft(y_up))
       svg.append("text")
         .attr("transform", "rotate(-90)")
-        .attr("y", 0 - margin.left)
+        .attr("y", 0 - 50)
         .attr("x",0 - (height / 4))
         .attr("dy", "1em")
         .style("text-anchor", "middle")
         .text("Goals")
+      // annotation of upper Y axis
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "6em")
+        .text("To win a game, a team must score more")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "7em")
+        .text("than their opposite. So the amount of")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "8em")
+        .text("goals is positively related to their points.")
       // upper barplot
       svg.append("g")
         .selectAll("rect")
@@ -379,11 +459,24 @@
       svg.append("g").call(d3.axisLeft(y_down))
       svg.append("text")
         .attr("transform", "rotate(-90)")
-        .attr("y", 0 - margin.left)
+        .attr("y", 0 - 50)
         .attr("x",0 - (height*3 / 4))
         .attr("dy", "1em")
         .style("text-anchor", "middle")
         .text("Conceded Goals")
+      // annotation of lower Y axis
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "20em")
+        .text("Conceding a goal is to fail to stop the")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "21em")
+        .text("oppositing team from scoring a goal.")
+      svg.append("text")
+        .attr("class", "annotation").attr("x", 0 - margin.left)
+        .attr("dy", "22em")
+        .text("Better team should have better defence.")
       // lower barplot
       svg.append("g")
         .selectAll("rect")
@@ -457,6 +550,12 @@
     <input name="plotbtn" type="radio" value="games" onclick="game_barplot()"> Games
     <input name="plotbtn" type="radio" value="goals" onclick="goal_barplot()"> Goals
   </div>
+
+  <p style="background-color:lightgray; padding-left:50px; line-height:23px; margin-left:10%; margin-right:10%">
+    <b>Points</b>: Displays points each team earns.
+    <br><b>Games</b>: Shows amounts of win, draw, and loss game of each team.
+    <br><b>Goals</b>: Displayes number of goals and conceded goals of each team.
+  </p>
 
 </body>
 </html>
