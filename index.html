@@ -1,561 +1,363 @@
-<!DOCTYPE html>
-<meta charset="utf-8">
-<style> /* Set the CSS */
-  .button {
-    border: none;
-    color: white;
-    padding: 15px 32px;
-    text-align: center;
-    left: 50%;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    margin: 4px 2px;
-    cursor: pointer;
+<!DOCTYPE HTML> 
+<html> 
+
+<script src="unit teapot.js"></script>
+
+<script src="gl-matrix-min.js"></script>
+
+<script>
+var gl;
+var shaderProgram;
+var modelview_uniform;
+var normal_uniform;
+var projection_uniform;
+var texture, texture2, texture3;
+var sampler_uniform;
+var sampler2_uniform;
+var sampler3_uniform;
+var teapot_vao;
+var vert_pos_attr;
+var vert_normal_attr;
+
+//
+// a default vertex shader implemented as a backquoted string variable
+//
+
+var vs = `#version 300 es
+#define PI 3.1415926538
+
+in vec3 aVertexPosition;
+in vec3 aVertexNormal;
+
+uniform mat4 uModelViewMatrix;
+uniform mat3 uNormalMatrix;
+uniform mat4 uProjectionMatrix;
+
+out vec3 vTransformedNormal;
+out vec3 vPosition;
+out vec4 vPositionViewing;
+
+void main() {
+  vPosition = aVertexPosition;
+  vTransformedNormal = uNormalMatrix*aVertexNormal;
+  vPositionViewing = uModelViewMatrix*vec4(aVertexPosition, 1.0);
+
+  gl_Position = uProjectionMatrix*vPositionViewing;
+}
+`;
+
+//
+// a default fragment shader implemented as a backquoted string variable
+//
+
+var fs = `#version 300 es
+#define PI 3.1415926538
+
+precision mediump float;
+
+in vec3 vTransformedNormal;
+in vec3 vPosition;
+in vec4 vPositionViewing;
+
+uniform sampler2D uSampler;
+uniform sampler2D uSampler2;
+uniform sampler2D uSampler3;
+
+float theta;
+vec2 illinoisTexCoord;
+vec2 stadiumTexCoord;
+vec3 lightDirection = normalize(vec3(1.0,0.25,0.0));
+vec3 lightColor = vec3(1.0, 1.0, 1.0);
+
+out vec4 outColor;
+
+void main() {
+  // compute angle to center
+  float normal_len = sqrt(vPosition.x*vPosition.x + vPosition.z*vPosition.z);
+  float sin_theta = vPosition.z / normal_len;
+  float cos_theta = -vPosition.x / normal_len;
+  if (sin_theta >= 0.0 && cos_theta >= 0.0) {
+    theta = asin(sin_theta);
+  } else if (sin_theta >= 0.0 && cos_theta <= 0.0) {
+    theta = acos(cos_theta);
+  } else if (sin_theta <= 0.0 && cos_theta <= 0.0) {
+    theta = PI - asin(sin_theta);
+  } else if (sin_theta <= 0.0 && cos_theta >= 0.0) {
+    theta = 2.0*PI + asin(sin_theta);
+  }
+  // illinois texture coord
+  illinoisTexCoord.s = theta / (PI * 2.0);
+  illinoisTexCoord.t = 1.6*vPosition.y + 0.55;
+
+  // stadium texture coord
+  stadiumTexCoord = 0.5*vTransformedNormal.xy + 0.5;
+
+  vec3 bumpNormal = vec3(texture(uSampler3, illinoisTexCoord));
+
+  // phong shading model
+  vec3 ambient_light = lightColor;
+  vec3 normalizedNormal = normalize(normalize(vTransformedNormal) + normalize(bumpNormal));
+  vec3 diffuse_light = dot(normalizedNormal, lightDirection) * lightColor;
+  vec3 reflect_dir = normalize(reflect(-lightDirection, normalizedNormal));
+  vec3 positionToEye = normalize(-vPositionViewing.xyz);
+  vec3 reflect_light = vec3(pow(max(dot(reflect_dir, positionToEye),0.0),10.0)*lightColor);
+
+  vec3 illinois = vec3(texture(uSampler, illinoisTexCoord));
+  vec3 stadium = vec3(texture (uSampler2, stadiumTexCoord));
+  vec3 c = (0.8 * illinois * stadium) * (ambient_light + 0.3*diffuse_light) + 0.8*reflect_light; 
+
+  outColor = vec4(c,1.0);
+}
+`;
+
+
+
+function initwebgl() {
+
+  //
+  // create a graphics context
+  //
+
+  var canvas = document.getElementById("myGLCanvas");
+  gl = canvas.getContext("webgl2");
+  if (!gl)
+    alert("Failed to create WebGL context!");
+
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  loadshaders(vs,fs);
+
+  // set up vertex array object
+ 
+  teapot_vao = gl.createVertexArray();
+  gl.bindVertexArray(teapot_vao);
+
+  // create a coordinate buffer of vertex positions and
+  // connect it to the vertex shader positions
+ 
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER,
+                new Float32Array(teapot.positions),
+                gl.STATIC_DRAW);
+
+  gl.enableVertexAttribArray(vert_pos_attr);
+  gl.vertexAttribPointer(vert_pos_attr, 3, gl.FLOAT, false, 0, 0);
+
+  // create a coordinate buffer of vertex positions and
+  // connect it to the vertex shader positions
+  // but normalize the normals first
+
+  var x,y,z,d,i;
+  for (i = 0; i < teapot.normals.length; i += 3) {
+    x = teapot.normals[i];
+    y = teapot.normals[i+1];
+    z = teapot.normals[i+2];
+
+    d = 1.0/Math.sqrt(x*x + y*y + z*z);
+
+    teapot.normals[i] *= d;
+    teapot.normals[i+1] *= d;
+    teapot.normals[i+2] *= d;
+    
   }
 
-  .score_btn {background-color: #4CAF50;} /* Green */
-  .game_btn {background-color: #008CBA;} /* Blue */
-  .goal_btn {background-color: #CD5C5C;} /* Red */
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER,
+                new Float32Array(teapot.normals),
+                gl.STATIC_DRAW);
 
-  div.tooltip {
-    position: absolute;
-    text-align: start;
-    /* width: 150px; */
-	  /* height: 28px; */
-	  padding: 2px;
-	  font: 12px sans-serif;
-	  background: lightblue;
-	  border: 0px;
-	  border-radius: 8px;
-  }
+  gl.enableVertexAttribArray(vert_normal_attr);
+  gl.vertexAttribPointer(vert_normal_attr, 3, gl.FLOAT, false, 0, 0);
 
-  .annotation {
-    fill: gray;
-    text-anchor: left;
-    font-size: 12px;
-  }
-</style>
+  // create an index buffer of triangle faces
 
-<head>
-  <title>18-19 Premier League Score</title>
-</head>
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); 
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
+                new Uint16Array(teapot.faces),
+                gl.STATIC_DRAW);
 
-<!-- load the d3.js library -->
-<script type="text/javascript" src="https://d3js.org/d3.v5.min.js"></script>
+  //
+  // set up texture and sampler
+  //
 
-<html>
-<body onload="init()">
-  <h2 style="text-align:center">2018–19 Premier League Statistics</h2>
-  <!-- <p style="text-align:center">Source <a href="1819PremierLeague.csv">1819PremierLeague.csv</a> file</p> -->
+  texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
 
-  <h3 style="text-align:left; margin-left:10%" >Introduction</h3>
-  <p style="text-align:left; margin-left:10%; margin-right:10%; padding-left:50px; line-height:22px;">
-    In this data visualization, we will demostrate the statistics of Premier League of 2018-19 season.
-    The source file of data is <a href="1819PremierLeague.csv">1819PremierLeague.csv</a>.
-    <br> The following three sliding windows are <u>Points Barplot</u>, showing points earned by each team;
-    <u>Games Barplot</u>, showing numbers of game a team won, drew, or lost;
-    <u>Goals Barplot</u>, showing amounts of goals and conceded goals of each team.
-  </p>
+  var sampler = gl.createSampler();
+  gl.bindSampler(0, sampler);
 
-  <h3 style="text-align:left; margin-left:10%" >Interaction</h3>
-  <p style="text-align:left; margin-left:10%; margin-right:10%; padding-left:50px; line-height:22px;">
-    Select radio button to switch among different barplots.
-    <br>Hover the mouse over bars to see exact values.
-  </p>
+  //
+  // load texture image using webgl2fundamentals boilerplate
+  // initially creates just a 1x1 blue pixel as a placeholder
+  // replaced by actual texture image once loaded
+  //
 
-  <!-- put svg into chart -->
-  <div id="chart" align="center"></div>
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA,
+                gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
 
-  <!-- <button class="button score_btn" onclick="score_barplot()">Score</button>
-  <button class="button game_btn" onclick="game_barplot()">Games</button>
-  <button class="button goal_btn" onclick="goal_barplot()">Goals</button> -->
+  var image = new Image();
+  image.src = "illinois512.png";
 
-  <script>
-    // size parameters
-    var window_width = 1000
-    var window_height = 500
-    var margin = {top: 50, right: 120, bottom: 100, left: 250}
-    var width = window_width - margin.left - margin.right
-    var height = window_height - margin.top - margin.bottom
-    // global svg variable
-    var svg = null
-    // global data variable
-    var data = null
-    // duration of transition (ms)
-    var duration = 400
-    // init function
-    async function init() {
-      // load data
-      data = await d3.csv("https://wanlinyang.github.io/1819PremierLeague.csv")
-      score_barplot()
-      // game_barplot()
-      // goal_barplot()
-    }
+  image.addEventListener("load", function() {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  });
 
-    function score_barplot() {
-      // reset svg
-      if (svg != null) { d3.select("svg").remove(); }
-      svg = d3.select("#chart")
-              .append("svg")
-                .attr("width", window_width)
-                .attr("height", window_height)
-              .append("g")
-                .attr("transform", "translate("+margin.left+","+margin.top+")")
-      // find the max point
-      var max_points = 0; var points_limit = 100
-      data.forEach(function (d) {
-        max_points = Math.max(max_points, parseInt(d.Pts))
-      })
-      // size before transition
-      var init_height = height/15
+  //
+  // set up second texture and sampler
+  //
 
-      // tooltip
-      var tooltip = d3.select("#chart")
-                      .append("div")
-                        .attr("class", "tooltip")
-                        .style("opacity", 0)
+  texture2 = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture2);
 
-      // X axis
-      var x = d3.scaleBand().domain(data.map(function(d){return d.Team;}))
-                .range([0,width]).padding(0.2)
-      svg.append("g")
-        .attr("transform", "translate(0," + height + ")")
-        .call(d3.axisBottom(x))
-        .selectAll("text")
-          .attr("transform", "translate(-10,0)rotate(-45)")
-          .style("text-anchor", "end")
-      // Y axis
-      var y = d3.scaleLinear().domain([0,points_limit]).range([height, 0])
-      svg.append("g").call(d3.axisLeft(y));
-      // label of Y axis
-      svg.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 0 - 50)
-        .attr("x", 0 - (height / 2))
-        .attr("dy", "1em")
-        .style("text-anchor", "middle")
-        .text("Points")
-      // annotation of Y axis
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "12em")
-        .text("Teams receive three points for a win")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "13em")
-        .text("and one point for a draw. No points")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "14em")
-        .text("are awarded for a loss.")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "15.5em")
-        .text("The team with the highest points at")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "16.5em")
-        .text("the end of the season is the champion.")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "18em")
-        .text("The three lowest placed teams in the")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "19em")
-        .text("Premier League are relegated.")
-      // Bar plot
-      svg.selectAll("rect")
-        .data(data)
-        .enter()
-        .append("rect")
-          .attr("x", function(d) { return x(d.Team); })
-          .attr("y", height-init_height )
-          .attr("width", x.bandwidth())
-          .attr("height", init_height )
-          .on("mouseover", function(d,i) {
-            d3.select(this).attr("fill","green")
-            tooltip.style("opacity", 1)
-            .style("left", (d3.event.pageX)+"px")
-            .style("top", (d3.event.pageY)+"px")
-            .style("width", Math.max(60,d.Team.length*7)+"px")
-            .style("height", "42px")
-            .html(d.Team+"<br/>"+"Points: "+d.Pts
-                  +"<br/>"+"Rank: "+(i+1))
-          })
-          .on("mouseout", function(d) {
-            d3.select(this).attr("fill","#69b3a2")
-            tooltip.style("opacity", 0)
-          })
-          .attr("fill", "#69b3a2")
-          .attr("stroke", "black")
-          // transition
-          .transition()
-          .duration(duration)
-          .attr("y", function(d) { return y(parseInt(d.Pts)); })
-          .attr("height", function(d) { return height-y(parseInt(d.Pts)); })
-          .delay(function(d,i) { return (i*10) })
+  var sampler2 = gl.createSampler();
+  gl.bindSampler(1, sampler2);
 
-      // Title of chart
-      svg.append("text")
-        .attr("x", (width / 2))
-        .attr("y", 0 - (margin.top / 2))
-        .attr("text-anchor", "middle")
-        .style("font-size", "18px")
-        .text("Points Barplot")
-    }
+  //
+  // load texture image using webgl2fundamentals boilerplate
+  // initially creates just a 1x1 blue pixel as a placeholder
+  // replaced by actual texture image once loaded
+  //
 
-    function game_barplot() {
-      // reset svg
-      if (svg != null) { d3.select("svg").remove(); }
-      svg = d3.select("#chart")
-              .append("svg")
-                .attr("width", window_width)
-                .attr("height", window_height)
-              .append("g")
-                .attr("transform", "translate("+margin.left+","+margin.top+")")
-      // find the max game amount
-      var max_win = 0; var max_draw =0; var max_lose = 0;
-      data.forEach(function (d) {
-        max_win = Math.max(max_win, parseInt(d.W))
-        max_draw = Math.max(max_draw, parseInt(d.D))
-        max_lose = Math.max(max_lose, parseInt(d.L))
-      })
-      var max_game = Math.max(max_win, max_draw, max_lose)
-      var game_limit = 35
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA,
+                gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
 
-      // list of teams
-      var teams = data.map(function(d) {return d.Team})
-      // list of subgroup of each team (Win, Draw, Lose)
-      var subgroups = ["W","D","L"]
-      // size before transition
-      var init_height = height/15
+  var image2 = new Image();
+  image2.src = "stadium sphere.jpg";
 
-      // X axis
-      var x = d3.scaleBand().domain(teams)
-                .range([0,width]).padding(0.2)
-      svg.append("g")
-        .attr("transform", "translate(0," + height + ")")
-        .call(d3.axisBottom(x))
-        .selectAll("text")
-          .attr("transform", "translate(-10,0)rotate(-45)")
-          .style("text-anchor", "end")
+  image2.addEventListener("load", function() {
+    gl.bindTexture(gl.TEXTURE_2D, texture2);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE, image2);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  });
 
-      var xSubgroup = d3.scaleBand()
-                        .domain(subgroups).range([0,x.bandwidth()])
-                        .padding(0.01)
+  //
+  // set up third texture and sampler
+  //
 
-      // Y axis
-      var y = d3.scaleLinear().domain([0,game_limit]).range([height,0])
-      svg.append("g").call(d3.axisLeft(y))
-      // label of Y axis
-      svg.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 0 - 50)
-        .attr("x",0 - (height / 2))
-        .attr("dy", "1em")
-        .style("text-anchor", "middle")
-        .text("Games")
-      // annotation of Y axis
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "12em")
-        .text("During the course of a season each club")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "13em")
-        .text("plays the others twice, for 38 games.")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "14.5em")
-        .text("Each game only has one result:")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "15.5em")
-        .text("Win, Draw, or Loss")
-      // tooltip
-      var tooltip = d3.select("#chart")
-                      .append("div")
-                        .attr("class", "tooltip")
-                        .style("opacity", 0)
+  texture3 = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture3);
 
-      // one color per subgroup
-      var color = d3.scaleOrdinal().domain(subgroups)
-                    .range(['lightgreen','lightblue','lightcoral'])
-      var highlight_color = d3.scaleOrdinal().domain(subgroups)
-                              .range(['green','dodgerblue','red'])
-      // barplot
-      svg.append("g")
-        .selectAll("g")
-        .data(data)
-        .enter()
-        .append("g")
-          .attr("transform", function(d) {return "translate("+x(d.Team)+",0)"})
-        .selectAll("rect")
-        .data(function(d,i) {return subgroups.map(function(key) {
-          return {key: key, value: d[key], idx: i};});})
-        .enter().append("rect")
-          .attr("x", function(d) { return xSubgroup(d.key) })
-          .attr("y", height-init_height)
-          .attr("width", xSubgroup.bandwidth())
-          .attr("height", init_height)
-          // tooltip
-          .on("mouseover", function(d,i) {
-            d3.select(this).attr("fill", function(d) { return highlight_color(d.key) })
-            tooltip.style("opacity", 1)
-            .style("left", (d3.event.pageX)+"px")
-            .style("top", (d3.event.pageY)+"px")
-            .style("width", Math.max(60,data[d.idx].Team.length*7)+"px")
-            .style("height", "70px")
-            .html(data[d.idx].Team+"<br/>"+"Win: "+data[d.idx].W
-                  +"<br/>"+"Draw: "+data[d.idx].D
-                  +"<br/>"+"Loss: "+data[d.idx].L
-                  +"<br/>"+"Rank: "+(d.idx+1))
-          })
-          .on("mouseout", function(d) {
-            d3.select(this).attr("fill", function(d) { return color(d.key) })
-            tooltip.style("opacity", 0)
-          })
-          .attr("fill", function(d) { return color(d.key) })
-          .attr("stroke", "gray")
-          // transition
-          .transition()
-          .duration(duration)
-          .attr("y", function(d) { return y(d.value) })
-          .attr("height", function(d) { return height-y(d.value) })
-          .delay(function(d,i) { return (i*10) })
+  var sampler3 = gl.createSampler();
+  gl.bindSampler(2, sampler3);
 
-      // Title of chart
-      svg.append("text")
-        .attr("x", (width / 2))
-        .attr("y", 0 - (margin.top / 2))
-        .attr("text-anchor", "middle")
-        .style("font-size", "18px")
-        .text("Games Barplot")
-      // Legend
-      legend_dict = {"Win":"lightgreen","Draw":"lightblue","Loss":"lightcoral"}
-      legend_keys = ["Win","Draw","Loss"]
-      var legend_size = 10
-      svg.append("g")
-          .attr("transform", "translate("+width*4/5+",0)")
-        .selectAll("rect")
-        .data(legend_keys)
-        .enter().append("rect")
-          .attr("x", 0)
-          .attr("y", function(d,i) { return i*(legend_size+5) })
-          .attr("height",legend_size).attr("width",legend_size)
-          .attr("fill", function(d) { return legend_dict[d] })
-      svg.append("g")
-          .attr("transform", "translate("+width*4/5+",0)")
-        .selectAll("text")
-        .data(legend_keys)
-          .enter().append("text")
-          .attr("x", legend_size+5)
-          .attr("y", function(d,i) { return i*(legend_size+5)+legend_size })
-          .attr("fill", function(d) { return legend_dict[d] })
-          .attr("text-anchor", "start")
-          .style("font-size", "16px")
-          .text(function(d) { return d})
-    }
+  //
+  // load texture image using webgl2fundamentals boilerplate
+  // initially creates just a 1x1 blue pixel as a placeholder
+  // replaced by actual texture image once loaded
+  //
 
-    function goal_barplot() {
-      if (svg != null) { d3.select("svg").remove(); }
-      svg = d3.select("#chart")
-              .append("svg")
-                .attr("width", window_width)
-                .attr("height", window_height)
-              .append("g")
-                .attr("transform", "translate("+margin.left+","+margin.top+")")
-      // find max goals and conceded amount
-      var max_goals = 0; var max_concedes = 0
-      data.forEach(function (d) {
-        max_goals = Math.max(max_goals, parseInt(d.GF))
-        max_concedes = Math.max(max_concedes, parseInt(d.GA))
-      })
-      var max_amount = Math.max(max_goals, max_concedes)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA,
+                gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
 
-      // list of teams
-      var teams = data.map(function(d) {return d.Team})
-      // key of goal and conceded (Goal, Conceded)
-      var subgroups = ["GF","GA"]
-      // size of transition
-      var init_height = height/15
+  var image3 = new Image();
+  image3.src = "illinois512_norm.png";
 
-      // X axis
-      var x = d3.scaleBand().domain(teams)
-                .range([0,width]).padding(0.2)
-      svg.append("g")
-        .attr("transform", "translate(0," + height + ")")
-        .call(d3.axisBottom(x))
-        .selectAll("text")
-          .attr("transform", "translate(-10,0)rotate(-45)")
-          .style("text-anchor", "end")
-      // tooltip
-      var tooltip = d3.select("#chart")
-                      .append("div")
-                        .attr("class", "tooltip")
-                        .style("opacity", 0)
+  image3.addEventListener("load", function() {
+    gl.bindTexture(gl.TEXTURE_2D, texture3);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, image3);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  });
 
-      // up Y axis
-      var y_up = d3.scaleLinear().domain([0,max_amount]).range([height/2,0])
-      svg.append("g").call(d3.axisLeft(y_up))
-      svg.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 0 - 50)
-        .attr("x",0 - (height / 4))
-        .attr("dy", "1em")
-        .style("text-anchor", "middle")
-        .text("Goals")
-      // annotation of upper Y axis
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "6em")
-        .text("To win a game, a team must score more")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "7em")
-        .text("than their opposite. So the amount of")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "8em")
-        .text("goals is positively related to their points.")
-      // upper barplot
-      svg.append("g")
-        .selectAll("rect")
-        .data(data)
-        .enter()
-        .append("rect")
-          .attr("x", function(d) { return x(d.Team); })
-          .attr("y", height/2-init_height)
-          .attr("width", x.bandwidth())
-          .attr("height", init_height)
-          .on("mouseover", function(d,i) {
-            d3.select(this).attr("fill","green")
-            tooltip.style("opacity", 1)
-            .style("left", (d3.event.pageX)+"px")
-            .style("top", (d3.event.pageY)+"px")
-            .style("width", Math.max(80,d.Team.length*7)+"px")
-            .style("height", "55px")
-            .html(d.Team+"<br/>"+"Goals: "+d.GF
-                  +"<br/>"+"Conceded: "+d.GA
-                  +"<br/>"+"Rank: "+(i+1))
-          })
-          .on("mouseout", function(d) {
-            d3.select(this).attr("fill","darkseagreen")
-            tooltip.style("opacity", 0)
-          })
-          .attr("fill", "darkseagreen")
-          .attr("stroke", "black")
-          // add transition
-          .transition()
-          .duration(duration)
-          .attr("y", function(d) { return y_up(parseInt(d.GF)); })
-          .attr("height", function(d) { return height/2-y_up(parseInt(d.GF)); })
-          .delay(function(d,i) { return (i*10) })
+  //
+  // set up transformation matrices
+  //
 
-      // down Y axis
-      var y_down = d3.scaleLinear().domain([0,max_amount]).range([height/2,height])
-      svg.append("g").call(d3.axisLeft(y_down))
-      svg.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 0 - 50)
-        .attr("x",0 - (height*3 / 4))
-        .attr("dy", "1em")
-        .style("text-anchor", "middle")
-        .text("Conceded Goals")
-      // annotation of lower Y axis
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "20em")
-        .text("Conceding a goal is to fail to stop the")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "21em")
-        .text("oppositing team from scoring a goal.")
-      svg.append("text")
-        .attr("class", "annotation").attr("x", 0 - margin.left)
-        .attr("dy", "22em")
-        .text("Better team should have better defence.")
-      // lower barplot
-      svg.append("g")
-        .selectAll("rect")
-        .data(data)
-        .enter()
-        .append("rect")
-          .attr("x", function(d) { return x(d.Team); })
-          .attr("y", function(d) { return height/2; } )
-          .attr("width", x.bandwidth())
-          .attr("height", function(d) { return init_height; })
-          .on("mouseover", function(d,i) {
-            d3.select(this).attr("fill","red")
-            tooltip.style("opacity", 1)
-            .style("left", (d3.event.pageX)+"px")
-            .style("top", (d3.event.pageY)+"px")
-            .style("width", Math.max(80,d.Team.length*7)+"px")
-            .style("height", "55px")
-            .html(d.Team+"<br/>"+"Goals: "+d.GF
-                  +"<br/>"+"Conceded: "+d.GA
-                  +"<br/>"+"Rank: "+(i+1))
-          })
-          .on("mouseout", function(d) {
-            d3.select(this).attr("fill","salmon")
-            tooltip.style("opacity", 0)
-          })
-          .attr("fill", "salmon")
-          .attr("stroke", "black")
-          // add transition
-          .transition()
-          .duration(duration)
-          .attr("y", function(d) { return height/2 })
-          .attr("height", function(d) { return y_down(parseInt(d.GA))-height/2; })
-          .delay(function(d,i) { return (i*10) })
-      // Title of chart
-      svg.append("text")
-        .attr("x", (width / 2))
-        .attr("y", 0 - (margin.top / 2))
-        .attr("text-anchor", "middle")
-        .style("font-size", "18px")
-        .text("Goals Barplot")
-      // Legend
-      legend_dict = {"Goals":"darkseagreen","Conceded Goals":"salmon"}
-      legend_keys = ["Goals","Conceded Goals"]
-      var legend_size = 10
-      svg.append("g")
-          .attr("transform", "translate("+width*4/5+",0)")
-        .selectAll("rect")
-        .data(legend_keys)
-        .enter().append("rect")
-          .attr("x", 0)
-          .attr("y", function(d,i) { return i*(legend_size+5) })
-          .attr("height",legend_size).attr("width",legend_size)
-          .attr("fill", function(d) { return legend_dict[d] })
-      svg.append("g")
-          .attr("transform", "translate("+width*4/5+",0)")
-        .selectAll("text")
-        .data(legend_keys)
-          .enter().append("text")
-          .attr("x", legend_size+5)
-          .attr("y", function(d,i) { return i*(legend_size+5)+legend_size })
-          .attr("fill", function(d) { return legend_dict[d] })
-          .attr("text-anchor", "start")
-          .style("font-size", "16px")
-          .text(function(d) { return d})
-    }
-  </script>
+  projection = glMatrix.mat4.create();
+  glMatrix.mat4.perspective(projection, Math.PI/6, 1.0, 0.1);
 
-  <!-- buttons -->
-  <div id="chart" align="center">
-    <input name="plotbtn" type="radio" value="points" onclick="score_barplot()" checked="checked"> Points
-    <input name="plotbtn" type="radio" value="games" onclick="game_barplot()"> Games
-    <input name="plotbtn" type="radio" value="goals" onclick="goal_barplot()"> Goals
-  </div>
+  requestAnimationFrame(draw);
+}
 
-  <p style="background-color:lightgray; padding-left:50px; line-height:23px; margin-left:10%; margin-right:10%">
-    <b>Points</b>: Displays points each team earns.
-    <br><b>Games</b>: Shows amounts of win, draw, and loss game of each team.
-    <br><b>Goals</b>: Displayes number of goals and conceded goals of each team.
-  </p>
+function loadshaders(vertexShaderSource,fragmentShaderSource) {
+  var vstextbox = document.getElementById("vertexshader");
+
+  var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vertexShader, vertexShaderSource);
+  gl.compileShader(vertexShader);
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
+    alert("Vertex Shader Error:\n" + gl.getShaderInfoLog(vertexShader));
+
+  var fstextbox = document.getElementById("fragmentshader");
+
+  var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fragmentShader, fragmentShaderSource);
+  gl.compileShader(fragmentShader);
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS))
+    alert("Fragment Shader Error:\n" + gl.getShaderInfoLog(fragmentShader));
+
+  //
+  // Compile shaders and get link ID's to the attributes and uniforms
+  //
+
+  shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, vertexShader);
+  gl.attachShader(shaderProgram, fragmentShader);
+  gl.linkProgram(shaderProgram);
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS))
+    alert("Failed to setup shaders");
+
+  vert_pos_attr = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+  vert_normal_attr = gl.getAttribLocation(shaderProgram, "aVertexNormal");
+  modelview_uniform = gl.getUniformLocation(shaderProgram, "uModelViewMatrix"); 
+  normal_uniform = gl.getUniformLocation(shaderProgram, "uNormalMatrix"); 
+  projection_uniform = gl.getUniformLocation(shaderProgram, "uProjectionMatrix"); 
+  sampler_uniform = gl.getUniformLocation(shaderProgram, "uSampler"); 
+  sampler2_uniform = gl.getUniformLocation(shaderProgram, "uSampler2"); 
+  sampler3_uniform = gl.getUniformLocation(shaderProgram, "uSampler3"); 
+}
+
+//
+// draw callback function that is passed to requestAnimationFrame()
+//
+
+function draw(time) {
+  gl.clearColor(0.075, 0.16, 0.294, 1.0);
+  gl.clearDepth(1.0);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  modelview = glMatrix.mat4.create();
+  glMatrix.mat4.translate(modelview,modelview,[0.0, 0.0, -2.0]);
+  glMatrix.mat4.rotateY(modelview,modelview, time*0.001);
+
+  normalmatrix = glMatrix.mat3.create();
+  glMatrix.mat3.normalFromMat4(normalmatrix,modelview);
+
+  gl.useProgram(shaderProgram);
+
+  gl.uniformMatrix4fv(modelview_uniform, false, modelview);
+  gl.uniformMatrix3fv(normal_uniform, false, normalmatrix);
+  gl.uniformMatrix4fv(projection_uniform, false, projection);
+
+  gl.uniform1i(sampler_uniform,0);
+  gl.uniform1i(sampler2_uniform,1);
+  gl.uniform1i(sampler3_uniform,2);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, texture2);
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, texture3);
+
+  gl.bindVertexArray(teapot_vao);
+  gl.drawElements(gl.TRIANGLES,
+                  teapot.faces.length,
+                  gl.UNSIGNED_SHORT,
+                  0);
+
+  requestAnimationFrame(draw);
+}
+
+
+</script>
+
+<body onload="initwebgl()">
+
+<canvas id="myGLCanvas" width="500" height="500"></canvas>
 
 </body>
 </html>
